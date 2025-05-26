@@ -1,85 +1,89 @@
+import json
 import os
 import socket
 from _thread import *
 
-from dotenv import load_dotenv
+from actions import ACTIONS
 
-load_dotenv()
-
-BIND_HOST = os.getenv("BIND_HOST", "127.0.0.1")
-BIND_PORT = int(os.getenv("BIND_PORT", "9090"))
-
-server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-
-
-server.bind((BIND_HOST, BIND_PORT))
-
-server.listen()
-
-clients_list = []
-
+from conf import BIND_HOST, BIND_PORT
 
 def format_message(text: str):
     return text.encode()
 
 
-def clientthread(conn, addr):
-    conn.send(format_message("Weolcome you fool"))
-    while True:
-        try:
-            message = conn.recv(2048)
-            print("Message received", message)
-            message = message.decode()
-            if message:
-                print("<" + addr[0] + "> " + message)
-                message_to_send = "<" + addr[0] + "> " + message
-                broadcast(message_to_send, conn)
+class Server:
+    def __init__(self, host, port):
+        self.server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self.server.bind((host, port))
+        self.server.listen()
+        self.client_list = []
 
-            else:
-                """message may have no content if the connection
-                    is broken, in this case we remove the connection"""
-                remove(conn)
-
-        except:
-            continue
-
-
-def broadcast(message, connection):
-    print("client_list", clients_list)
-    for client in clients_list:
-        print(client, "sending")
-        if client != connection:
+    def clientthread(self, conn, addr):
+        while True:
             try:
-                client.send(format_message(message))
-            except Exception as e:
-                print("error sending message", e)
-                client.close()
-                remove(client)
+                message = conn.recv(2048)
+                message = self._decode(message)
+                if message:
+                    self.on_message(message, conn)
+                else:
+                    self.remove_conn(conn)
+
+            except:
+                continue
+
+    def broadcast(self, message, connection):
+        for client in self.client_list:
+            print(client, "sending")
+            if client != connection:
+                try:
+                    client.send(format_message(message))
+                except Exception as e:
+                    print("error sending message", e)
+                    client.close()
+                    self.remove_conn(client)
 
 
-def remove(connection):
-    if connection in clients_list:
-        clients_list.remove(connection)
+    def remove_conn(self, connection):
+        if connection in self.client_list:
+            self.client_list.remove(connection)
 
+    def send_message(self, conn, body: dict):
+        print("sending message", body)
+        data = json.dumps(body)
+        data = self._encode(data)
+        conn.send(body)
 
-while True:
-    """Accepts a connection request and stores two parameters,
-    conn which is a socket object for that user, and addr
-    which contains the IP address of the client that just
-    connected"""
-    conn, addr = server.accept()
+    def on_message(self, message: str, conn):
+        try:
+            data = json.loads(message)
+            if data.get("action"):
+                action = data.get("action")
+                if ACTIONS.get(action):
+                    print("calling action", action)
+                    response = ACTIONS[action](data.get("data"))
+                    print("response", response)
+                    body = {"action": action, "success": response.success, "data": response.data}
+                    self.send_message(conn, body)
+            print("[INVALID ACTION]", data)
+        except json.JSONDecodeError:
+            print("invalid json")
 
-    """Maintains a list of clients for ease of broadcasting
-    a message to all available people in the chatroom"""
-    clients_list.append(conn)
+    def start(self):
+        while True:
+            conn, addr = self.server.accept()
+            self.client_list.append(conn)
+            start_new_thread(self.clientthread, (conn, addr))
 
-    # prints the address of the user that just connected
-    print(addr[0] + " connected")
+    def close(self):
+        self.server.close()
 
-    # creates and individual thread for every user
-    # that connects
-    start_new_thread(clientthread, (conn, addr))
+    def _encode(self, text: str):
+        return text.encode()
 
-conn.close()
-server.close()
+    def _decode(self, text: bytes):
+        return text.decode()
+
+if __name__ == "__main__":
+    server = Server(BIND_HOST, BIND_PORT)
+    server.start()
