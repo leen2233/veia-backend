@@ -8,9 +8,9 @@ db = client.chat
 @dataclass
 class User:
     username: str
-    full_name: str
     email: str
     password: str
+    full_name: Optional[str] = None
 
 
 def get_user_by_username(username) -> Optional[User]:
@@ -28,4 +28,3 @@ def check_user_exists(username: Optional[str] = None, email: Optional[str] = Non
 def create_user(user: User):
     item = db.users.insert_one(asdict(user))
     return user
-    

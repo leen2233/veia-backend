@@ -1,6 +1,6 @@
 from typing import Callable, Dict, Tuple
 from lib import db
-from utils.crypt import check_password, create_tokens
+from utils.crypt import check_password, create_tokens, hash_password
 from dataclasses import dataclass
 
 @dataclass
@@ -42,6 +42,8 @@ def sign_up(data: Dict) -> Response:
     email: str = data.get("email", "")
     full_name: str = data.get("full_name", "")
 
+    print("checking")
+
     errors = {}
     if not username:
         errors["username"] = "Username cannot be empty"
@@ -51,17 +53,22 @@ def sign_up(data: Dict) -> Response:
         errors["email"] = "Email cannot be empty"
 
     if errors:
+        print('errors found')
         return Response(False, errors)
 
+    print("checking user exists")
     user_exists = db.check_user_exists(username=username, email=email)
     if user_exists["username"]:
         errors["username"] = "User with this username already exists."
     if user_exists["email"]:
         errors["email"] = "User with this email already exists."
     if errors:
+        print("user found sending erross")
         return Response(False, errors)
 
+    print("crating user")
     user = db.User(**data)
+    user.password = hash_password(user.password)
     user = db.create_user(user)
 
     tokens = create_tokens(user)

@@ -52,7 +52,7 @@ class Server:
         print("sending message", body)
         data = json.dumps(body)
         data = self._encode(data)
-        conn.send(body)
+        conn.send(data)
 
     def on_message(self, message: str, conn):
         try:
@@ -61,13 +61,17 @@ class Server:
                 action = data.get("action")
                 if ACTIONS.get(action):
                     print("calling action", action)
-                    response = ACTIONS[action](data.get("data"))
+                    func = ACTIONS[action]
+                    data = data.get("data")
+                    response = func(data)
                     print("response", response)
-                    body = {"action": action, "success": response.success, "data": response.data}
+                    body = {"action": action, "success": response.status, "data": response.data}
                     self.send_message(conn, body)
-            print("[INVALID ACTION]", data)
         except json.JSONDecodeError:
             print("invalid json")
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
 
     def start(self):
         while True:
