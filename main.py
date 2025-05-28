@@ -1,11 +1,11 @@
 import json
-import os
 import socket
-from _thread import *
+from _thread import start_new_thread
 
 from actions import ACTIONS
-
 from conf import BIND_HOST, BIND_PORT
+from lib.connection import Connection
+
 
 def format_message(text: str):
     return text.encode()
@@ -19,7 +19,7 @@ class Server:
         self.server.listen()
         self.client_list = []
 
-    def clientthread(self, conn, addr):
+    def clientthread(self, conn: Connection):
         while True:
             try:
                 message = conn.recv(2048)
@@ -43,7 +43,6 @@ class Server:
                     client.close()
                     self.remove_conn(client)
 
-
     def remove_conn(self, connection):
         if connection in self.client_list:
             self.client_list.remove(connection)
@@ -54,30 +53,34 @@ class Server:
         data = self._encode(data)
         conn.send(data)
 
-    def on_message(self, message: str, conn):
+    def on_message(self, message: str, conn: Connection):
         try:
             data = json.loads(message)
             if data.get("action"):
                 action = data.get("action")
                 if ACTIONS.get(action):
-                    print("calling action", action)
                     func = ACTIONS[action]
                     data = data.get("data")
-                    response = func(data)
-                    print("response", response)
+                    response = func(data, conn)
+                    print(conn.user, "user")
                     body = {"action": action, "success": response.status, "data": response.data}
                     self.send_message(conn, body)
+                else:
+                    print("[Aciton not found]", action)
         except json.JSONDecodeError:
             print("invalid json")
-        except Exception as e:
+        except Exception:
             import traceback
+
             traceback.print_exc()
 
     def start(self):
         while True:
             conn, addr = self.server.accept()
+            conn = Connection(conn, addr)
             self.client_list.append(conn)
-            start_new_thread(self.clientthread, (conn, addr))
+            print("client connected")
+            start_new_thread(self.clientthread, (conn,))
 
     def close(self):
         self.server.close()
@@ -87,6 +90,7 @@ class Server:
 
     def _decode(self, text: bytes):
         return text.decode()
+
 
 if __name__ == "__main__":
     server = Server(BIND_HOST, BIND_PORT)
