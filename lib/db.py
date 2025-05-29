@@ -1,4 +1,6 @@
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
+from datetime import datetime
+from enum import Enum
 from typing import Dict, List, Optional
 
 from bson.objectid import ObjectId
@@ -19,43 +21,158 @@ class User:
     def __repr__(self) -> str:
         return f"<{self._id} - {self.username}>"
 
-    def to_dict(self) -> Dict:
+    def serialize(self) -> Dict:
         return {"username": self.username, "email": self.email, "id": str(self._id), "full_name": self.full_name}
 
 
-def get_user(id: Optional[str] = None, username: Optional[str] = None, email: Optional[str] = None) -> Optional[User]:
-    query = {}
-    if id:
-        object_id = ObjectId(id)
-        query["_id"] = object_id
-    if username:
-        query["username"] = username
-    if email:
-        query["email"] = email
-    item = db.users.find_one(query)
-    if item:
-        return User(**item)
-    return None
+@dataclass
+class Chat:
+    user1: str
+    user2: str
+    _id: Optional[ObjectId] = None
+    last_message: Optional[str] = None
+    created_at: Optional[datetime] = field(default_factory=datetime.now)
+    updated_at: Optional[datetime] = field(default_factory=datetime.now)
+
+    def __repr__(self) -> str:
+        return f"<{self._id} - {self.user1} - {self.user2}>"
+
+    def serialize(self, user: User):
+        if self.user1 == user._id:
+            other_user_id = self.user2
+        else:
+            other_user_id = self.user1
+
+        other_user = UserManager().get(id=other_user_id)
+        other_user = other_user.serialize() if other_user else None
+        updated_at = self.updated_at.timestamp() if self.updated_at else ""
+        return {"id": str(self._id), "user": other_user, "last_message": self.last_message, "updated_at": updated_at}
 
 
-def check_user_exists(username: Optional[str] = None, email: Optional[str] = None) -> Dict[str, bool]:
-    username_exists = db.users.find_one({"username": username}) is not None
-    email_exists = db.users.find_one({"username": username}) is not None
+@dataclass
+class Message:
+    class Status(Enum):
+        SENDING = "sending"
+        SENT = "sent"
+        FAILED = "failed"
+        READ = "read"
 
-    return {"username": username_exists, "email": email_exists}
+    chat: str
+    text: str
+    sender: str
+    time: Optional[datetime] = field(default_factory=datetime.now)
+    _id: Optional[str] = None
+    status: Status = Status.SENT
+
+    reply_to: Optional[str] = None
+
+    def serialize(self, user=None):
+        if user:
+            return {
+                "id": str(self._id),
+                "text": self.text,
+                "is_mine": str(self.sender) == str(user._id),
+                "time": self.time.timestamp() if self.time else None,
+                "status": self.status.value if type(self.status) != str else self.status,
+            }
+        return {
+            "id": str(self._id),
+            "text": self.text,
+            "sender": self.sender,
+            "time": self.time.timestamp() if self.time else None,
+            "status": self.status.value if type(self.status) != str else self.status,
+        }
 
 
-def create_user(user: User) -> User:
-    data = asdict(user)
-    data.pop("_id")  # let mongodb assign random id
-    item = db.users.insert_one(data)
-    user._id = item.inserted_id
-    print(user)
-    return user
+class UserManager:
+    def __init__(self) -> None:
+        pass
+
+    def get(
+        self, id: Optional[str] = None, username: Optional[str] = None, email: Optional[str] = None
+    ) -> Optional[User]:
+        query = {}
+        if id:
+            object_id = ObjectId(id)
+            query["_id"] = object_id
+        if username:
+            query["username"] = username
+        if email:
+            query["email"] = email
+        item = db.users.find_one(query)
+        if item:
+            return User(**item)
+        return None
+
+    def check_exists(self, username: Optional[str] = None, email: Optional[str] = None) -> Dict[str, bool]:
+        username_exists = db.users.find_one({"username": username}) is not None
+        email_exists = db.users.find_one({"username": username}) is not None
+
+        return {"username": username_exists, "email": email_exists}
+
+    def create(self, user: User) -> User:
+        data = asdict(user)
+        data.pop("_id")  # let mongodb assign random id
+        item = db.users.insert_one(data)
+        user._id = item.inserted_id
+        return user
+
+    def search(self, q: str) -> List[User]:
+        users = db.users.find({"username": {"$regex": q, "$options": "i"}}).limit(10)
+        users = [User(**user) for user in users]
+
+        return users
 
 
-def search_users(q: str) -> List[User]:
-    users = db.users.find({"username": {"$regex": q, "$options": "i"}}).limit(10)
-    users = [User(**user) for user in users]
+class ChatManager:
+    def __init__(self) -> None:
+        pass
 
-    return users
+    def get(self, id: str) -> Optional[Chat]:
+        chat = db.chats.find_one({"_id": ObjectId(id)})
+        return Chat(**chat) if chat else None
+
+    def get_user_chats(self, user_id: str) -> List[Chat]:
+        chats = db.chats.find({"$or": [{"user1": user_id}, {"user2": user_id}]}).sort("updated_time", -1)
+        chats = [Chat(**chat) for chat in chats]
+        return chats
+
+    def create(self, chat: Chat):
+        data = asdict(chat)
+        data.pop("_id")
+        item = db.chats.insert_one(data)
+        chat._id = item.inserted_id
+        return chat
+
+    def check_exists(self, user1: str, user2: str) -> Optional[Chat]:
+        item = db.chats.find_one({"$or": [{"user1": user1, "user2": user2}, {"user2": user1, "user1": user2}]})
+        if not item:
+            return None
+        return Chat(**item)
+
+
+class MessageManager:
+    def __init__(self) -> None:
+        pass
+
+    def create(self, message: Message):
+        data = {
+            "chat": message.chat,
+            "text": message.text,
+            "sender": str(message.sender),
+            "status": message.status.value,
+        }
+        print(data, "created")
+        item = db.messages.insert_one(data)
+        message._id = item.inserted_id
+        return message
+
+    def get_chat_messages(self, chat_id: str) -> List[Message]:
+        messages = db.messages.find({"chat": chat_id})
+        messages = [Message(**message) for message in messages]
+        return messages
+
+
+users = UserManager()
+chats = ChatManager()
+messages = MessageManager()

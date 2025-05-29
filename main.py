@@ -2,7 +2,7 @@ import json
 import socket
 from _thread import start_new_thread
 
-from actions import ACTIONS
+import actions
 from conf import BIND_HOST, BIND_PORT
 from lib.connection import Connection
 
@@ -34,7 +34,6 @@ class Server:
 
     def broadcast(self, message, connection):
         for client in self.client_list:
-            print(client, "sending")
             if client != connection:
                 try:
                     client.send(format_message(message))
@@ -48,21 +47,22 @@ class Server:
             self.client_list.remove(connection)
 
     def send_message(self, conn, body: dict):
-        print("sending message", body)
+        print("[SENT]", body)
+        print("--" * 30)
         data = json.dumps(body)
         data = self._encode(data)
         conn.send(data)
 
     def on_message(self, message: str, conn: Connection):
+        print("[RECV]", message, "\n")
         try:
             data = json.loads(message)
             if data.get("action"):
                 action = data.get("action")
-                if ACTIONS.get(action):
-                    func = ACTIONS[action]
+                if hasattr(actions, action):
+                    func = getattr(actions, action)
                     data = data.get("data")
                     response = func(data, conn)
-                    print(conn.user, "user")
                     body = {"action": action, "success": response.status, "data": response.data}
                     self.send_message(conn, body)
                 else:

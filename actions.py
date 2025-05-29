@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Callable, Dict
+from typing import Dict
 
 from lib import db
 from lib.connection import Connection
@@ -26,7 +26,7 @@ def login(data: Dict, conn) -> Response:
     if errors:
         return Response(False, errors)
 
-    user = db.get_user(username=username)
+    user = db.users.get(username=username)
     if not user:
         errors["message"] = "User not found"
         return Response(False, errors)
@@ -46,8 +46,6 @@ def sign_up(data: Dict, conn) -> Response:
     email: str = data.get("email", "")
     full_name: str = data.get("full_name", "")
 
-    print("checking")
-
     errors = {}
     if not username:
         errors["username"] = "Username cannot be empty"
@@ -57,23 +55,19 @@ def sign_up(data: Dict, conn) -> Response:
         errors["email"] = "Email cannot be empty"
 
     if errors:
-        print("errors found")
         return Response(False, errors)
 
-    print("checking user exists")
-    user_exists = db.check_user_exists(username=username, email=email)
+    user_exists = db.users.check_exists(username=username, email=email)
     if user_exists["username"]:
         errors["username"] = "User with this username already exists."
     if user_exists["email"]:
         errors["email"] = "User with this email already exists."
     if errors:
-        print("user found sending erross")
         return Response(False, errors)
 
-    print("crating user")
     user = db.User(**data)
     user.password = crypt.hash_password(user.password)
-    user = db.create_user(user)
+    user = db.users.create(user)
 
     tokens = crypt.create_tokens(user)
     return Response(True, tokens)
@@ -87,21 +81,19 @@ def authenticate(data: Dict, conn: Connection) -> Response:
         return Response(False, {"message": "Access token is no valid"})
 
     user_id = payload.get("sub")
-    print("user id: ", user_id)
-    user = db.get_user(id=user_id)
+    user = db.users.get(id=user_id)
     if not user:
         return Response(False, {"message": "User not found"})
 
     conn.authenticate(user)
-    print("user", conn.user)
     return Response(True, {"message": "authenticated"})
 
 
 @protected
 def search_users(data, conn) -> Response:
     query = data.get("q")
-    users = db.search_users(query)
-    serialized_users = [user.to_dict() for user in users]
+    users = db.users.search(query)
+    serialized_users = [user.serialize() for user in users]
     return Response(True, {"results": serialized_users})
 
 
@@ -114,10 +106,55 @@ def refresh_access_token(data, conn) -> Response:
     return Response(True, {"access_token": access_token})
 
 
-ACTIONS: Dict[str, Callable] = {
-    "login": login,
-    "sign_up": sign_up,
-    "authenticate": authenticate,
-    "search_users": search_users,
-    "refresh_access_token": refresh_access_token,
-}
+@protected
+def get_chats(data, conn) -> Response:
+    user = conn.user
+    chats = db.chats.get_user_chats(user._id)
+    chats_serialized = [chat.serialize(user) for chat in chats]
+    return Response(True, {"results": chats_serialized})
+
+
+@protected
+def new_message(data, conn) -> Response:
+    chat_id = data.get("chat_id", "")
+    if not chat_id:
+        user_id = data.get("user_id")
+        chat = db.chats.check_exists(conn.user._id, user_id)
+        if not chat:
+            if not user_id:
+                return Response(False, {"message": "chat id or user id required"})
+            chat = db.Chat(user1=conn.user._id, user2=user_id)
+            chat = db.chats.create(chat)
+        chat_id = str(chat._id)
+
+    text = data.get("text")
+    message = db.Message(text=text, sender=conn.user._id, chat=chat_id)
+    message = db.messages.create(message)
+
+    message_serialized = message.serialize(conn.user)
+
+    return Response(True, {"message": message_serialized})
+
+
+@protected
+def get_messages(data, conn):
+    chat = None
+    chat_id = data.get("chat_id", "")
+    if not chat_id:
+        user_id = data.get("user_id")
+        chat = db.chats.check_exists(conn.user._id, user_id)
+        if not chat:
+            if not user_id:
+                return Response(False, {"message": "chat id or user id required"})
+            chat = db.Chat(user1=conn.user._id, user2=user_id)
+            chat = db.chats.create(chat)
+        chat_id = str(chat._id)
+
+    if not chat:
+        chat = db.chats.get(chat_id)
+        if not chat:
+            return Response(False, {"message": "chat not found"})
+
+    messages = db.messages.get_chat_messages(chat_id)
+    messages_serialized = [message.serialize(conn.user) for message in messages]
+    return Response(True, {"results": messages_serialized, "chat": chat.serialize(conn.user)})
