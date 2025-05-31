@@ -117,6 +117,7 @@ def get_chats(data, conn) -> Response:
 @protected
 def new_message(data, conn) -> Response:
     chat_id = data.get("chat_id", "")
+    chat = None
     if not chat_id:
         user_id = data.get("user_id")
         chat = db.chats.check_exists(conn.user._id, user_id)
@@ -126,14 +127,17 @@ def new_message(data, conn) -> Response:
             chat = db.Chat(user1=conn.user._id, user2=user_id)
             chat = db.chats.create(chat)
         chat_id = str(chat._id)
+    else:
+        chat = db.chats.get(chat_id)
 
     text = data.get("text")
     message = db.Message(text=text, sender=conn.user._id, chat=chat_id)
     message = db.messages.create(message)
 
     message_serialized = message.serialize(conn.user)
+    chat_serialized = chat.serialize(conn.user) if chat else None
 
-    return Response(True, {"message": message_serialized})
+    return Response(True, {"message": message_serialized, "chat": chat_serialized})
 
 
 @protected

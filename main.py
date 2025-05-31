@@ -49,9 +49,30 @@ class Server:
     def send_message(self, conn, body: dict):
         print("[SENT]", body)
         print("--" * 30)
+        user_conn = None
+
+        if body.get('action', '') == "new_message":
+            chat = body.get("data", {}).get('chat')
+            if chat:
+                body.get("data", {}).pop("chat")
+                print("trying to get online user", chat)
+                if chat:
+                    user = chat.get("user")
+                    user_conn = next((connection for connection in self.client_list if str(connection.user._id) == user.get("id")))
+                    print("Found online", user_conn)
+
         data = json.dumps(body)
         data = self._encode(data)
         conn.send(data)
+
+        if user_conn:
+            body.get("data", {}).get("message", {})["is_mine"] = False
+            print("[SENT]", body)
+            print("--" * 30)
+            data = json.dumps(body)
+            data = self._encode(data)
+            user_conn.send(data)
+
 
     def on_message(self, message: str, conn: Connection):
         print("[RECV]", message, "\n")
@@ -75,6 +96,7 @@ class Server:
             traceback.print_exc()
 
     def start(self):
+        print(f"Listening at {BIND_HOST}:{BIND_PORT}")
         while True:
             conn, addr = self.server.accept()
             conn = Connection(conn, addr)

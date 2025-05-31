@@ -38,13 +38,13 @@ class Chat:
         return f"<{self._id} - {self.user1} - {self.user2}>"
 
     def serialize(self, user: User):
-        if self.user1 == user._id:
+        if str(self.user1) == str(user._id):
             other_user_id = self.user2
         else:
             other_user_id = self.user1
-
         other_user = UserManager().get(id=other_user_id)
-        other_user = other_user.serialize() if other_user else None
+        other_user = other_user.serialize() if other_user else user.serialize()
+
         updated_at = self.updated_at.timestamp() if self.updated_at else ""
         return {"id": str(self._id), "user": other_user, "last_message": self.last_message, "updated_at": updated_at}
 
@@ -133,19 +133,21 @@ class ChatManager:
         return Chat(**chat) if chat else None
 
     def get_user_chats(self, user_id: str) -> List[Chat]:
-        chats = db.chats.find({"$or": [{"user1": user_id}, {"user2": user_id}]}).sort("updated_time", -1)
+        chats = db.chats.find({"$or": [{"user1": str(user_id)}, {"user2": str(user_id)}]}).sort("updated_time", -1)
         chats = [Chat(**chat) for chat in chats]
         return chats
 
     def create(self, chat: Chat):
         data = asdict(chat)
         data.pop("_id")
+        data["user1"] = str(data["user1"])
+        data["user2"] = str(data["user2"])
         item = db.chats.insert_one(data)
         chat._id = item.inserted_id
         return chat
 
     def check_exists(self, user1: str, user2: str) -> Optional[Chat]:
-        item = db.chats.find_one({"$or": [{"user1": user1, "user2": user2}, {"user2": user1, "user1": user2}]})
+        item = db.chats.find_one({"$or": [{"user1": str(user1), "user2": str(user2)}, {"user2": str(user1), "user1": str(user2)}]})
         if not item:
             return None
         return Chat(**item)
