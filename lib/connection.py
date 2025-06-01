@@ -1,29 +1,28 @@
-import socket
 from typing import Optional
+
+from websockets import WebSocketServerProtocol
 
 from lib.db import User
 
 
 class Connection:
-    def __init__(self, socket: socket.socket, addr) -> None:
-        self.socket = socket
+    def __init__(self, websocket: WebSocketServerProtocol, addr) -> None:
+        self.websocket = websocket
         self.addr = addr
         self.user: Optional[User] = None
 
     @property
     def is_authenticated(self) -> bool:
-        if self.user:
-            return True
-        return False
+        return self.user is not None
 
     def authenticate(self, user: User):
         self.user = user
 
-    def send(self, data):
-        self.socket.send(data)
+    async def send(self, data):
+        await self.websocket.send(data)
 
-    def recv(self, *args, **kwargs):
-        return self.socket.recv(*args, **kwargs)
+    async def recv(self):
+        return await self.websocket.recv()
 
-    def close(self):
-        return self.socket.close()
+    async def close(self):
+        await self.websocket.close()
