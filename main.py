@@ -46,7 +46,7 @@ class Server:
                 print("trying to get online user", chat)
                 if chat:
                     user = chat.get("user")
-                    user_conn = next((connection for connection in self.client_list if str(connection.user._id) == user.get("id")), None)
+                    user_conn = next((connection for connection in self.client_list if connection.user and str(connection.user._id) == user.get("id")), None)
                     print("Found online", user_conn)
 
         data = json.dumps(body)
