@@ -1,5 +1,6 @@
 import asyncio
 import json
+import traceback
 
 import websockets
 
@@ -50,7 +51,6 @@ class Server:
                     print("Found online", user_conn)
 
         data = json.dumps(body)
-        data = self._encode(data)
         await conn.send(data)
 
         if user_conn:
@@ -58,7 +58,6 @@ class Server:
             print("[SENT]", body)
             print("--" * 30)
             data = json.dumps(body)
-            data = self._encode(data)
             await user_conn.send(data)
 
 
@@ -79,20 +78,12 @@ class Server:
         except json.JSONDecodeError:
             print("invalid json")
         except Exception:
-            import traceback
-
             traceback.print_exc()
 
     async def start(self):
         print(f"Listening at {self.host}:{self.port}")
         async with websockets.serve(self.handler, self.host, self.port):
             await asyncio.Future()
-
-    def _encode(self, text: str):
-        return text.encode()
-
-    def _decode(self, text: bytes):
-        return text.decode()
 
 
 if __name__ == "__main__":
