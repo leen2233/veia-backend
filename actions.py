@@ -28,7 +28,7 @@ def login(data: Dict, conn) -> Response:
 
     user = db.users.get(username=username)
     if not user:
-        errors["message"] = "User not found"
+        errors["message"] = "Username or Password is invalid"
         return Response(False, errors)
 
     is_password_correct = crypt.check_password(password, user.password)

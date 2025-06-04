@@ -1,6 +1,7 @@
 import asyncio
 import json
 import traceback
+from typing import List
 
 import websockets
 
@@ -15,7 +16,7 @@ def format_message(text: str):
 
 class Server:
     def __init__(self, host, port):
-        self.client_list = []
+        self.client_list: List[Connection] = []
         self.host = host
         self.port = port
 
@@ -38,7 +39,7 @@ class Server:
     async def send_message(self, conn, body: dict):
         print("[SENT]", body)
         print("--" * 30)
-        user_conn = None
+        online_user_conns = None
 
         if body.get('action', '') == "new_message":
             chat = body.get("data", {}).get('chat')
@@ -47,18 +48,20 @@ class Server:
                 print("trying to get online user", chat)
                 if chat:
                     user = chat.get("user")
-                    user_conn = next((connection for connection in self.client_list if connection.user and str(connection.user._id) == user.get("id")), None)
-                    print("Found online", user_conn)
+                    online_user_conns = [connection for connection in self.client_list if connection.user and str(connection.user._id) == user.get("id")]
+                    print("Found online", online_user_conns)
 
         data = json.dumps(body)
         await conn.send(data)
 
-        if user_conn:
+        if online_user_conns:
             body.get("data", {}).get("message", {})["is_mine"] = False
             print("[SENT]", body)
             print("--" * 30)
             data = json.dumps(body)
-            await user_conn.send(data)
+            for _conn in online_user_conns:
+                if _conn.is_open:
+                    await _conn.send(data)
 
 
     async def on_message(self, message: str, conn: Connection):

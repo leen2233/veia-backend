@@ -1,13 +1,14 @@
 from typing import Optional
 
-from websockets import WebSocketServerProtocol
+from websockets import ServerConnection
+from websockets.protocol import State
 
 from lib.db import User
 
 
 class Connection:
-    def __init__(self, websocket: WebSocketServerProtocol, addr) -> None:
-        self.websocket = websocket
+    def __init__(self, websocket: ServerConnection, addr) -> None:
+        self.websocket: ServerConnection = websocket
         self.addr = addr
         self.user: Optional[User] = None
 
@@ -26,3 +27,7 @@ class Connection:
 
     async def close(self):
         await self.websocket.close()
+
+    @property
+    def is_open(self) -> bool:
+        return self.websocket.state == State.OPEN
