@@ -44,7 +44,6 @@ class Server:
         if body.get('action', '') == "new_message":
             chat = body.get("data", {}).get('chat')
             if chat:
-                body.get("data", {}).pop("chat")
                 print("trying to get online user", chat)
                 if chat:
                     user = chat.get("user")
