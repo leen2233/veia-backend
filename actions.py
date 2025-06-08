@@ -86,7 +86,7 @@ def authenticate(data: Dict, conn: Connection) -> Response:
         return Response(False, {"message": "User not found"})
 
     conn.authenticate(user)
-    return Response(True, {"message": "authenticated"})
+    return Response(True, {"message": "authenticated", "user": user.serialize()})
 
 
 @protected
