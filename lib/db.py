@@ -1,10 +1,10 @@
 from dataclasses import asdict, dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Dict, List, Optional
 
 from bson.objectid import ObjectId
-from pymongo import MongoClient
+from pymongo import DESCENDING, MongoClient
 
 client = MongoClient()
 db = client.chat
@@ -133,7 +133,7 @@ class ChatManager:
         return Chat(**chat) if chat else None
 
     def get_user_chats(self, user_id: str) -> List[Chat]:
-        chats = db.chats.find({"$or": [{"user1": str(user_id)}, {"user2": str(user_id)}]}).sort("updated_time", -1)
+        chats = db.chats.find({"$or": [{"user1": str(user_id)}, {"user2": str(user_id)}]}).sort("updated_at", -1)
         chats = [Chat(**chat) for chat in chats]
         return chats
 
@@ -166,6 +166,7 @@ class MessageManager:
         }
         print(data, "created")
         item = db.messages.insert_one(data)
+        db.chats.update_one({"_id": ObjectId(message.chat)}, {"$set": {"last_message": message.text, "updated_at": datetime.now()}})
         message._id = item.inserted_id
         return message
 
