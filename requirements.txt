@@ -3,3 +3,5 @@ python-dotenv
 pymongo
 bcrypt
 PyJWT
+flask
+requests

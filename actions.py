@@ -88,6 +88,26 @@ def authenticate(data: Dict, conn: Connection) -> Response:
     conn.authenticate(user)
     return Response(True, {"message": "authenticated", "user": user.serialize()})
 
+@protected
+def update_user(data, conn) -> Response:
+    user = conn.user
+
+    username = data.get("username")
+    if username != user.username and db.users.check_exists(username=username).get("username"):
+        return Response(False, {"username": "User with this username already exists"})
+
+    updated_user = db.User(
+        username=username,
+        email=user.email,
+        password=user.password,
+        avatar=data.get("avatar", user.avatar),
+        full_name=data.get("full_name", user.full_name)
+    )
+    updated_user = db.users.update(user._id, updated_user)
+    conn.authenticate(updated_user)
+
+    return Response(True, {"user": updated_user.serialize()})
+
 
 @protected
 def search_users(data, conn) -> Response:

@@ -1,10 +1,10 @@
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime
 from enum import Enum
 from typing import Dict, List, Optional
 
 from bson.objectid import ObjectId
-from pymongo import DESCENDING, MongoClient
+from pymongo import MongoClient
 
 client = MongoClient()
 db = client.chat
@@ -16,13 +16,14 @@ class User:
     email: str
     password: str
     _id: Optional[ObjectId] = None
+    avatar: Optional[str] = None
     full_name: Optional[str] = None
 
     def __repr__(self) -> str:
         return f"<{self._id} - {self.username}>"
 
     def serialize(self) -> Dict:
-        return {"username": self.username, "email": self.email, "id": str(self._id), "full_name": self.full_name}
+        return {"username": self.username, "email": self.email, "id": str(self._id), "full_name": self.full_name, "avatar": self.avatar}
 
 
 @dataclass
@@ -105,8 +106,8 @@ class UserManager:
         return None
 
     def check_exists(self, username: Optional[str] = None, email: Optional[str] = None) -> Dict[str, bool]:
-        username_exists = db.users.find_one({"username": username}) is not None
-        email_exists = db.users.find_one({"username": username}) is not None
+        username_exists = db.users.find_one({"username": username}) is not None if username else False
+        email_exists = db.users.find_one({"email": email}) is not None if email else False
 
         return {"username": username_exists, "email": email_exists}
 
@@ -115,6 +116,14 @@ class UserManager:
         data.pop("_id")  # let mongodb assign random id
         item = db.users.insert_one(data)
         user._id = item.inserted_id
+        return user
+
+    def update(self, user_id, user: User) -> User:
+        user_id = ObjectId(user_id) if type(user_id) is str else user_id
+        data = asdict(user)
+        data.pop("_id")
+        db.users.update_one({"_id": user_id}, {"$set": data})
+        user._id = user_id
         return user
 
     def search(self, q: str) -> List[User]:
