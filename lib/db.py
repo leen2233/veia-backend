@@ -23,7 +23,14 @@ class User:
         return f"<{self._id} - {self.username}>"
 
     def serialize(self) -> Dict:
-        return {"username": self.username, "email": self.email, "id": str(self._id), "full_name": self.full_name, "avatar": self.avatar}
+        return {
+            "username": self.username,
+            "display_name": self.full_name if self.full_name else self.username,
+            "email": self.email,
+            "id": str(self._id),
+            "full_name": self.full_name,
+            "avatar": self.avatar
+        }
 
 
 @dataclass
@@ -47,7 +54,12 @@ class Chat:
         other_user = other_user.serialize() if other_user else user.serialize()
 
         updated_at = self.updated_at.timestamp() if self.updated_at else ""
-        return {"id": str(self._id), "user": other_user, "last_message": self.last_message, "updated_at": updated_at}
+        return {
+            "id": str(self._id),
+            "user": other_user,
+            "last_message": self.last_message,
+            "updated_at": updated_at
+        }
 
 
 @dataclass
