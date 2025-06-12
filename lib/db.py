@@ -80,6 +80,14 @@ class Message:
     reply_to: Optional[str] = None
 
     def serialize(self, user=None):
+        if self.reply_to:
+            reply_to = MessageManager().get(id=self.reply_to)
+            if reply_to:
+                reply_to = reply_to.serialize(user=user)
+            else:
+                reply_to = None
+        else:
+            reply_to = None
         if user:
             return {
                 "id": str(self._id),
@@ -87,6 +95,7 @@ class Message:
                 "is_mine": str(self.sender) == str(user._id),
                 "time": self.time.timestamp() if self.time else None,
                 "status": self.status.value if type(self.status) != str else self.status,
+                "reply_to": reply_to
             }
         return {
             "id": str(self._id),
@@ -94,6 +103,17 @@ class Message:
             "sender": self.sender,
             "time": self.time.timestamp() if self.time else None,
             "status": self.status.value if type(self.status) != str else self.status,
+            "reply_to": reply_to
+        }
+
+    def to_dict(self):
+        return {
+            "chat": self.chat,
+            "text": self.text,
+            "sender": str(self.sender),
+            "status": self.status.value,
+            "time": self.time,
+            "reply_to": self.reply_to
         }
 
 
@@ -178,14 +198,12 @@ class MessageManager:
     def __init__(self) -> None:
         pass
 
+    def get(self, id: str) -> Optional[Message]:
+        chat = db.messages.find_one({"_id": ObjectId(id)})
+        return Message(**chat) if chat else None
+
     def create(self, message: Message):
-        data = {
-            "chat": message.chat,
-            "text": message.text,
-            "sender": str(message.sender),
-            "status": message.status.value,
-        }
-        print(data, "created")
+        data = message.to_dict()
         item = db.messages.insert_one(data)
         db.chats.update_one({"_id": ObjectId(message.chat)}, {"$set": {"last_message": message.text, "updated_at": datetime.now()}})
         message._id = item.inserted_id

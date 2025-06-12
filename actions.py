@@ -151,7 +151,8 @@ def new_message(data, conn) -> Response:
         chat = db.chats.get(chat_id)
 
     text = data.get("text")
-    message = db.Message(text=text, sender=conn.user._id, chat=chat_id)
+    reply_to = data.get("reply_to")
+    message = db.Message(text=text, sender=conn.user._id, chat=chat_id, reply_to=reply_to)
     message = db.messages.create(message)
 
     message_serialized = message.serialize(conn.user)
