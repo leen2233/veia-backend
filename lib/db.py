@@ -18,6 +18,7 @@ class User:
     _id: Optional[ObjectId] = None
     avatar: Optional[str] = None
     full_name: Optional[str] = None
+    last_seen: Optional[datetime] = field(default_factory=datetime.now)
 
     def __repr__(self) -> str:
         return f"<{self._id} - {self.username}>"
@@ -29,7 +30,8 @@ class User:
             "email": self.email,
             "id": str(self._id),
             "full_name": self.full_name,
-            "avatar": self.avatar
+            "avatar": self.avatar,
+            "last_seen": self.last_seen.timestamp() if self.last_seen else None
         }
 
 
@@ -209,8 +211,8 @@ class MessageManager:
         message._id = item.inserted_id
         return message
 
-    def get_chat_messages(self, chat_id: str) -> List[Message]:
-        messages = db.messages.find({"chat": chat_id})
+    def get_chat_messages(self, chat_id: str, limit: int = 10) -> List[Message]:
+        messages = db.messages.find({"chat": chat_id}).limit(limit)
         messages = [Message(**message) for message in messages]
         return messages
 

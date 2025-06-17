@@ -31,3 +31,6 @@ class Connection:
     @property
     def is_open(self) -> bool:
         return self.websocket.state == State.OPEN
+
+    def __repr__(self) -> str:
+        return f"<Connection user={self.user}>"
