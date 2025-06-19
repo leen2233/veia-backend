@@ -162,7 +162,7 @@ def new_message(data, conn) -> Response:
 
 
 @protected
-def get_messages(data, conn):
+def get_messages(data, conn) -> Response:
     chat = None
     chat_id = data.get("chat_id", "")
     if not chat_id:
@@ -183,3 +183,17 @@ def get_messages(data, conn):
     messages = db.messages.get_chat_messages(chat_id, limit=10)
     messages_serialized = [message.serialize(conn.user) for message in messages]
     return Response(True, {"results": messages_serialized, "chat": chat.serialize(conn.user)})
+
+
+@protected
+def delete_message(data, conn: Connection) -> Response:
+    message_id = data.get("message_id")
+    message = db.messages.get(message_id)
+    if not message:
+        return Response(False, {"message": "message not found"})
+
+    if not conn.user or message.sender != str(conn.user._id):
+        return Response(False, {"message": "permission error"})
+
+    db.messages.delete(message_id)
+    return Response(True, {"id": message_id})
