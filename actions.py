@@ -197,3 +197,18 @@ def delete_message(data, conn: Connection) -> Response:
 
     db.messages.delete(message_id)
     return Response(True, {"id": message_id})
+
+
+@protected
+def edit_message(data, conn: Connection) -> Response:
+    message_id = data.get("message_id")
+    text = data.get("text")
+    message = db.messages.get(message_id)
+    if not message:
+        return Response(False, {"message": "message not found"})
+
+    if not conn.user or message.sender != str(conn.user._id):
+        return Response(False, {"message": "permission error"})
+
+    db.messages.update(message_id, text)
+    return Response(True, {"id": message_id, "text": text})

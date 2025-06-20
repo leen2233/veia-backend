@@ -211,14 +211,19 @@ class MessageManager:
         message._id = item.inserted_id
         return message
 
+    def update(self, message_id: str, text: str):
+        db.messages.update_one({"_id": ObjectId(message_id)}, {"$set": {"text": text}})
+        return True
+
     def delete(self, message_id: str) -> bool:
         id = ObjectId(message_id)
         db.messages.delete_one({"_id": id})
         return True
 
     def get_chat_messages(self, chat_id: str, limit: int = 10) -> List[Message]:
-        messages = db.messages.find({"chat": chat_id}).limit(limit)
+        messages = db.messages.find({"chat": chat_id}).sort('time', -1).limit(limit)
         messages = [Message(**message) for message in messages]
+        messages.reverse()
         return messages
 
 
