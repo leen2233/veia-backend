@@ -3,7 +3,7 @@ import copy
 import json
 import traceback
 from datetime import datetime
-from typing import List
+from typing import List, Optional
 
 import websockets
 
@@ -56,7 +56,7 @@ class Server:
 
             self.client_list.remove(connection)
 
-    async def send_message(self, conn, body: dict):
+    async def send_message(self, conn, body: dict, additional_data: Optional[dict] = {}):
         print("[BODY::: ]", body)
         if body.get('action', '') == "new_message":
             online_user_conns = None
@@ -111,13 +111,22 @@ class Server:
                                 print(e)
 
         elif body.get("action", '') == "delete_message" or body.get('action', '') == "edit_message": # because responses nearly same
-            other_user = body.get("data", {}).get("chat", {}).get("user")
-            body.get('data', {}).pop("chat")
-            if other_user:
-                connections = await self.find_online_user(other_user)
-                data = json.dumps(body)
-                for connection in connections:
-                    await connection.send(data)
+            if additional_data:
+                other_user = additional_data.get("chat", {}).get("user")
+                if other_user:
+                    connections = await self.find_online_user(other_user)
+                    data = json.dumps(body)
+                    for connection in connections:
+                        await connection.send(data)
+
+        elif body.get('action', '') == "read_message":
+            if additional_data:
+                users_to_notify = additional_data.get("users_to_notify", [])
+                for user_to_notify in users_to_notify:
+                    connections = await self.find_online_user(user_to_notify)
+                    data = json.dumps(body)
+                    for connection in connections:
+                        await connection.send(data)
 
 
         print("[SENT]", body)
@@ -141,7 +150,7 @@ class Server:
                     data = data.get("data")
                     response = func(data, conn)
                     body = {"action": action, "success": response.status, "data": response.data}
-                    await self.send_message(conn, body)
+                    await self.send_message(conn, body, response.additional_data)
                 else:
                     print("[Aciton not found]", action)
         except json.JSONDecodeError:

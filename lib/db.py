@@ -5,6 +5,7 @@ from typing import Dict, List, Optional
 
 from bson.objectid import ObjectId
 from pymongo import MongoClient
+from pymongo.results import UpdateResult
 
 client = MongoClient()
 db = client.chat
@@ -70,9 +71,7 @@ class Chat:
 @dataclass
 class Message:
     class Status(Enum):
-        SENDING = "sending"
         SENT = "sent"
-        FAILED = "failed"
         READ = "read"
 
     chat: str
@@ -214,9 +213,14 @@ class MessageManager:
         message._id = item.inserted_id
         return message
 
-    def update(self, message_id: str, text: str):
-        db.messages.update_one({"_id": ObjectId(message_id)}, {"$set": {"text": text}})
-        return True
+    def update(self, message_id: str, data: dict):
+        result: UpdateResult = db.messages.update_one({"_id": ObjectId(message_id)}, {"$set": data})
+        return result.modified_count > 0
+
+    def update_many(self, message_ids: List[str], data: dict):
+        object_ids = [ObjectId(mid) for mid in message_ids]
+        result: UpdateResult = db.messages.update_many({"_id": {"$in": object_ids}}, {"$set": data})
+        return result.modified_count > 0
 
     def delete(self, message_id: str) -> bool:
         id = ObjectId(message_id)

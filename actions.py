@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Dict
+from typing import Dict, Optional
 
 from lib import db
 from lib.connection import Connection
@@ -11,6 +11,7 @@ from utils.decorators import protected
 class Response:
     status: bool
     data: Dict
+    additional_data: Optional[Dict] = None
 
 
 def login(data: Dict, conn) -> Response:
@@ -201,7 +202,7 @@ def delete_message(data, conn: Connection) -> Response:
         chat = chat.serialize(user=conn.user, serialize_user=False)
 
     db.messages.delete(message_id)
-    return Response(True, {"id": message_id, "chat": chat})
+    return Response(True, {"id": message_id}, additional_data={"chat": chat})
 
 
 @protected
@@ -219,5 +220,35 @@ def edit_message(data, conn: Connection) -> Response:
     if chat:
         chat = chat.serialize(user=conn.user, serialize_user=False)
 
-    db.messages.update(message_id, text)
-    return Response(True, {"id": message_id, "text": text, "chat": chat})
+    db.messages.update(message_id, {"text": text})
+    return Response(True, {"id": message_id, "text": text}, additional_data={"chat": chat})
+
+
+@protected
+def read_message(data, conn: Connection) -> Response:
+    message_id = data.get("message_id")
+    message_ids = data.get("message_ids", []) # for multiple
+
+    updated = False
+    if message_id:
+        message_ids.append(message_id)
+    updated = db.messages.update_many(message_ids, {"status": db.Message.Status.READ.value})
+
+    users_to_notify = set()
+    chats = set()
+
+    if updated:
+        for id in message_ids:
+            message = db.messages.get(id)
+            if message and message.chat not in chats:
+                chat = db.chats.get(message.chat)
+                chats.add(message.chat)
+                if chat:
+                    user_to_notify = ""
+                    if conn.user and chat.user1 == conn.user._id:
+                        user_to_notify = chat.user2
+                    elif conn.user and chat.user2 == conn.user._id:
+                        user_to_notify = chat.user1
+                    users_to_notify.add(user_to_notify)
+
+    return Response(updated, {"ids": message_ids, "status": "read"}, additional_data={"users_to_notify": users_to_notify})
