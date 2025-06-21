@@ -44,7 +44,6 @@ def sign_up(data: Dict, conn) -> Response:
     username: str = data.get("username", "")
     password: str = data.get("password", "")
     email: str = data.get("email", "")
-    full_name: str = data.get("full_name", "")
 
     errors = {}
     if not username:
@@ -158,6 +157,8 @@ def new_message(data, conn) -> Response:
     message_serialized = message.serialize(conn.user)
     chat_serialized = chat.serialize(conn.user) if chat else None
 
+    print("[messag esetered]", message_serialized)
+
     return Response(True, {"message": message_serialized, "chat": chat_serialized})
 
 
@@ -195,8 +196,12 @@ def delete_message(data, conn: Connection) -> Response:
     if not conn.user or message.sender != str(conn.user._id):
         return Response(False, {"message": "permission error"})
 
+    chat = db.chats.get(id=message.chat)
+    if chat:
+        chat = chat.serialize(user=conn.user, serialize_user=False)
+
     db.messages.delete(message_id)
-    return Response(True, {"id": message_id})
+    return Response(True, {"id": message_id, "chat": chat})
 
 
 @protected
@@ -210,5 +215,9 @@ def edit_message(data, conn: Connection) -> Response:
     if not conn.user or message.sender != str(conn.user._id):
         return Response(False, {"message": "permission error"})
 
+    chat = db.chats.get(id=message.chat)
+    if chat:
+        chat = chat.serialize(user=conn.user, serialize_user=False)
+
     db.messages.update(message_id, text)
-    return Response(True, {"id": message_id, "text": text})
+    return Response(True, {"id": message_id, "text": text, "chat": chat})

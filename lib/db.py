@@ -47,13 +47,16 @@ class Chat:
     def __repr__(self) -> str:
         return f"<{self._id} - {self.user1} - {self.user2}>"
 
-    def serialize(self, user: User):
+    def serialize(self, user: User, serialize_user=True):
         if str(self.user1) == str(user._id):
             other_user_id = self.user2
         else:
             other_user_id = self.user1
-        other_user = UserManager().get(id=other_user_id)
-        other_user = other_user.serialize() if other_user else user.serialize()
+        if serialize_user:
+            other_user = UserManager().get(id=other_user_id)
+            other_user = other_user.serialize() if other_user else user.serialize()
+        else:
+            other_user = other_user_id
 
         updated_at = self.updated_at.timestamp() if self.updated_at else ""
         return {
@@ -96,7 +99,7 @@ class Message:
                 "text": self.text,
                 "is_mine": str(self.sender) == str(user._id),
                 "time": self.time.timestamp() if self.time else None,
-                "status": self.status.value if type(self.status) != str else self.status,
+                "status": self.status.value if type(self.status) is not str else self.status,
                 "reply_to": reply_to
             }
         return {
@@ -104,7 +107,7 @@ class Message:
             "text": self.text,
             "sender": self.sender,
             "time": self.time.timestamp() if self.time else None,
-            "status": self.status.value if type(self.status) != str else self.status,
+            "status": self.status.value if type(self.status) is not str else self.status,
             "reply_to": reply_to
         }
 
