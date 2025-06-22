@@ -245,9 +245,9 @@ def read_message(data, conn: Connection) -> Response:
                 chats.add(message.chat)
                 if chat:
                     user_to_notify = ""
-                    if conn.user and chat.user1 == conn.user._id:
+                    if conn.user and str(chat.user1) == str(conn.user._id):
                         user_to_notify = chat.user2
-                    elif conn.user and chat.user2 == conn.user._id:
+                    elif conn.user and str(chat.user2) == str(conn.user._id):
                         user_to_notify = chat.user1
                     users_to_notify.add(user_to_notify)
 
