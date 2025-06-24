@@ -1,5 +1,4 @@
 import asyncio
-import copy
 import json
 import traceback
 from datetime import datetime
@@ -11,10 +10,7 @@ import actions
 from conf import BIND_HOST, BIND_PORT
 from lib import db
 from lib.connection import Connection
-
-
-def format_message(text: str):
-    return text.encode()
+from utils.server_holder import use_server
 
 
 class Server:
@@ -58,23 +54,7 @@ class Server:
 
     async def send_message(self, conn, body: dict, additional_data: Optional[dict] = {}):
         print("[BODY::: ]", body)
-        if body.get('action', '') == "new_message":
-            online_user_conns = None
-            chat = body.get("data", {}).get('chat')
-            if chat:
-                if chat:
-                    user = chat.get("user")
-                    online_user_conns = await self.find_online_user(user.get("id"))
-
-            if online_user_conns:
-                body_changed = copy.deepcopy(body)
-                body_changed.get("data", {}).get("message", {})["is_mine"] = False
-                data = json.dumps(body_changed)
-                for _conn in online_user_conns:
-                    if _conn.is_open:
-                        await _conn.send(data)
-
-        elif body.get('action', '') == "get_chats":
+        if body.get('action', '') == "get_chats":
             for chat in body.get("data", {}).get("results", []):
                 if chat and chat.get("user", {}).get("id"):
                     online_users = await self.find_online_user(chat["user"]["id"])
@@ -138,6 +118,15 @@ class Server:
     async def find_online_user(self, id: str) -> List[Connection]:
         return [connection for connection in self.client_list if connection.is_open and connection.user and str(connection.user._id) == id]
 
+    async def handle_update(self, update: db.Update):
+        for user in update.users:
+            online_user_conns = await self.find_online_user(user)
+            if online_user_conns:
+                data = {"action": update.type, "success": True, "data": update.body}
+                data = json.dumps(data)
+                for _conn in online_user_conns:
+                    if _conn.is_open:
+                        await _conn.send(data)
 
     async def on_message(self, message: str, conn: Connection):
         print("[RECV]", message, "\n")
@@ -148,9 +137,10 @@ class Server:
                 if hasattr(actions, action):
                     func = getattr(actions, action)
                     data = data.get("data")
-                    response = func(data, conn)
-                    body = {"action": action, "success": response.status, "data": response.data}
-                    await self.send_message(conn, body, response.additional_data)
+                    response: actions.Response = func(data, conn)
+                    if response.send_now:
+                        body = {"action": action, "success": response.status, "data": response.data}
+                        await self.send_message(conn, body, response.additional_data)
                 else:
                     print("[Aciton not found]", action)
         except json.JSONDecodeError:
@@ -166,4 +156,5 @@ class Server:
 
 if __name__ == "__main__":
     server = Server(BIND_HOST, BIND_PORT)
+    use_server(server)
     asyncio.run(server.start())

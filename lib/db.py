@@ -7,6 +7,8 @@ from bson.objectid import ObjectId
 from pymongo import MongoClient
 from pymongo.results import UpdateResult
 
+from utils.server_holder import handle_update
+
 client = MongoClient()
 db = client.chat
 
@@ -92,23 +94,18 @@ class Message:
                 reply_to = None
         else:
             reply_to = None
-        if user:
-            return {
-                "id": str(self._id),
-                "text": self.text,
-                "is_mine": str(self.sender) == str(user._id),
-                "time": self.time.timestamp() if self.time else None,
-                "status": self.status.value if type(self.status) is not str else self.status,
-                "reply_to": reply_to
-            }
-        return {
+        data = {
             "id": str(self._id),
             "text": self.text,
-            "sender": self.sender,
             "time": self.time.timestamp() if self.time else None,
             "status": self.status.value if type(self.status) is not str else self.status,
             "reply_to": reply_to
         }
+        if user:
+            data["is_mine"] = str(self.sender) == str(user._id)
+        else:
+            data["sender"] = str(self.sender)
+        return data
 
     def to_dict(self):
         return {
@@ -119,6 +116,14 @@ class Message:
             "time": self.time,
             "reply_to": self.reply_to
         }
+
+@dataclass
+class Update:
+    type: str
+    body: dict
+    users: List[str]
+    created_at: Optional[datetime] = field(default_factory=datetime.now)
+    _id: Optional[str] = None
 
 
 class UserManager:
@@ -234,6 +239,27 @@ class MessageManager:
         return messages
 
 
+class UpdateManager:
+    def __init__(self) -> None:
+        pass
+
+    def get(self, user: str, created_at: datetime) -> List[Update]:
+        updates = db.updates.find({"users": user, "created_at": {"$gt": created_at}})
+        updates = [Update(**update) for update in updates]
+        return updates
+
+    def create(self, update: Update) -> Update:
+        data = asdict(update)
+        data.pop("_id")
+        item = db.updates.insert_one(data)
+        update._id = item.inserted_id
+
+        handle_update(update)
+
+        return update
+
+
 users = UserManager()
 chats = ChatManager()
 messages = MessageManager()
+updates = UpdateManager()

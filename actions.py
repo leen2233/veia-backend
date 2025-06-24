@@ -12,6 +12,7 @@ class Response:
     status: bool
     data: Dict
     additional_data: Optional[Dict] = None
+    send_now: bool = True
 
 
 def login(data: Dict, conn) -> Response:
@@ -155,12 +156,16 @@ def new_message(data, conn) -> Response:
     message = db.Message(text=text, sender=conn.user._id, chat=chat_id, reply_to=reply_to)
     message = db.messages.create(message)
 
-    message_serialized = message.serialize(conn.user)
+    message_serialized = message.serialize()
     chat_serialized = chat.serialize(conn.user) if chat else None
 
-    print("[messag esetered]", message_serialized)
+    data = {"message": message_serialized, "chat": chat_serialized}
 
-    return Response(True, {"message": message_serialized, "chat": chat_serialized})
+    if chat:
+        update = db.Update(type="new_message", body=data, users=[chat.user1, chat.user2])
+        db.updates.create(update)
+
+    return Response(True, {}, send_now=False)
 
 
 @protected
@@ -183,7 +188,7 @@ def get_messages(data, conn) -> Response:
             return Response(False, {"message": "chat not found"})
 
     messages = db.messages.get_chat_messages(chat_id, limit=10)
-    messages_serialized = [message.serialize(conn.user) for message in messages]
+    messages_serialized = [message.serialize() for message in messages]
     return Response(True, {"results": messages_serialized, "chat": chat.serialize(conn.user)})
 
 
@@ -198,11 +203,13 @@ def delete_message(data, conn: Connection) -> Response:
         return Response(False, {"message": "permission error"})
 
     chat = db.chats.get(id=message.chat)
-    if chat:
-        chat = chat.serialize(user=conn.user, serialize_user=False)
 
     db.messages.delete(message_id)
-    return Response(True, {"id": message_id}, additional_data={"chat": chat})
+    if chat:
+        update = db.Update(type="delete_message", body={"message_id": message_id}, users=[chat.user1, chat.user2])
+        db.updates.create(update)
+
+    return Response(True, {}, send_now=False)
 
 
 @protected
@@ -217,11 +224,13 @@ def edit_message(data, conn: Connection) -> Response:
         return Response(False, {"message": "permission error"})
 
     chat = db.chats.get(id=message.chat)
-    if chat:
-        chat = chat.serialize(user=conn.user, serialize_user=False)
-
     db.messages.update(message_id, {"text": text})
-    return Response(True, {"id": message_id, "text": text}, additional_data={"chat": chat})
+
+    if chat:
+        update = db.Update(type="edit_message", body={"message_id": message_id, "text": text}, users=[chat.user1, chat.user2])
+        db.updates.create(update)
+
+    return Response(True, {}, send_now=False)
 
 
 @protected
@@ -249,6 +258,10 @@ def read_message(data, conn: Connection) -> Response:
                         user_to_notify = chat.user2
                     elif conn.user and str(chat.user2) == str(conn.user._id):
                         user_to_notify = chat.user1
-                    users_to_notify.add(user_to_notify)
+                    users_to_notify.add(str(user_to_notify))
 
-    return Response(updated, {"ids": message_ids, "status": "read"}, additional_data={"users_to_notify": users_to_notify})
+    data = {"ids": message_ids, "status": "read"}
+    update = db.Update(type="read_message", body=data, users=list(users_to_notify))
+    db.updates.create(update)
+
+    return Response(updated, {}, send_now=False)
