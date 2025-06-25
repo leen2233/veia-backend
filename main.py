@@ -5,6 +5,7 @@ from datetime import datetime
 from typing import List, Optional
 
 import websockets
+from termcolor import colored, cprint
 
 import actions
 from conf import BIND_HOST, BIND_PORT
@@ -22,7 +23,7 @@ class Server:
     async def handler(self, websocket):
         conn = Connection(websocket, websocket.remote_address)
         self.client_list.append(conn)
-        print("client connected")
+        cprint("client connected", "green")
         try:
             async for message in websocket:
                 await self.on_message(message, conn)
@@ -53,7 +54,6 @@ class Server:
             self.client_list.remove(connection)
 
     async def send_message(self, conn, body: dict, additional_data: Optional[dict] = {}):
-        print("[BODY::: ]", body)
         if body.get('action', '') == "get_chats":
             for chat in body.get("data", {}).get("results", []):
                 if chat and chat.get("user", {}).get("id"):
@@ -108,8 +108,8 @@ class Server:
                     for connection in connections:
                         await connection.send(data)
 
-
-        print("[SENT]", body)
+        text = colored("[SENT]", "blue")
+        print(text, body)
         print("--" * 30)
 
         data = json.dumps(body)
@@ -129,7 +129,8 @@ class Server:
                         await _conn.send(data)
 
     async def on_message(self, message: str, conn: Connection):
-        print("[RECV]", message, "\n")
+        text = colored("[RECV]", "yellow")
+        print(text, message, "\n")
         try:
             data = json.loads(message)
             if data.get("action"):
@@ -149,7 +150,7 @@ class Server:
             traceback.print_exc()
 
     async def start(self):
-        print(f"Listening at {self.host}:{self.port}")
+        cprint(f"Listening at {self.host}:{self.port}", "green")
         async with websockets.serve(self.handler, self.host, self.port):
             await asyncio.Future()
 

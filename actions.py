@@ -162,7 +162,7 @@ def new_message(data, conn) -> Response:
     data = {"message": message_serialized, "chat": chat_serialized}
 
     if chat:
-        update = db.Update(type="new_message", body=data, users=[chat.user1, chat.user2])
+        update = db.Update(type="new_message", body=data, users=list(set([chat.user1, chat.user2])))
         db.updates.create(update)
 
     return Response(True, {}, send_now=False)
@@ -172,6 +172,8 @@ def new_message(data, conn) -> Response:
 def get_messages(data, conn) -> Response:
     chat = None
     chat_id = data.get("chat_id", "")
+    last_message = data.get("last_message")
+    
     if not chat_id:
         user_id = data.get("user_id")
         chat = db.chats.check_exists(conn.user._id, user_id)
@@ -187,9 +189,9 @@ def get_messages(data, conn) -> Response:
         if not chat:
             return Response(False, {"message": "chat not found"})
 
-    messages = db.messages.get_chat_messages(chat_id, limit=10)
+    messages, has_more = db.messages.get_chat_messages(chat_id, limit=20, last_message=last_message)
     messages_serialized = [message.serialize() for message in messages]
-    return Response(True, {"results": messages_serialized, "chat": chat.serialize(conn.user)})
+    return Response(True, {"results": messages_serialized, "chat": chat.serialize(conn.user), "has_more": has_more})
 
 
 @protected
@@ -206,7 +208,7 @@ def delete_message(data, conn: Connection) -> Response:
 
     db.messages.delete(message_id)
     if chat:
-        update = db.Update(type="delete_message", body={"message_id": message_id}, users=[chat.user1, chat.user2])
+        update = db.Update(type="delete_message", body={"message_id": message_id}, users=list(set([chat.user1, chat.user2])))
         db.updates.create(update)
 
     return Response(True, {}, send_now=False)
@@ -227,7 +229,7 @@ def edit_message(data, conn: Connection) -> Response:
     db.messages.update(message_id, {"text": text})
 
     if chat:
-        update = db.Update(type="edit_message", body={"message_id": message_id, "text": text}, users=[chat.user1, chat.user2])
+        update = db.Update(type="edit_message", body={"message_id": message_id, "text": text}, users=list(set([chat.user1, chat.user2])))
         db.updates.create(update)
 
     return Response(True, {}, send_now=False)

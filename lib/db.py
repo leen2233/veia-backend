@@ -1,7 +1,7 @@
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 from bson.objectid import ObjectId
 from pymongo import MongoClient
@@ -232,11 +232,20 @@ class MessageManager:
         db.messages.delete_one({"_id": id})
         return True
 
-    def get_chat_messages(self, chat_id: str, limit: int = 10) -> List[Message]:
-        messages = db.messages.find({"chat": chat_id}).sort('time', -1).limit(limit)
+    def get_chat_messages(self, chat_id: str, limit: int = 10, last_message: Optional[str] = None) -> Tuple[List[Message], bool]:
+        query: dict = {"chat": chat_id}
+        if last_message:
+            query["_id"] = {"$lt": ObjectId(last_message)}
+        messages = db.messages.find(query).sort('time', -1).limit(limit)
+
         messages = [Message(**message) for message in messages]
         messages.reverse()
-        return messages
+
+        # know if has earlier message
+        first_message = messages[0]
+        has_earlier_message = db.messages.count_documents({"time": {"$lt": first_message.time}, "chat": first_message.chat}) > 0
+
+        return messages, has_earlier_message
 
 
 class UpdateManager:
