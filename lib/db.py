@@ -125,6 +125,14 @@ class Update:
     created_at: Optional[datetime] = field(default_factory=datetime.now)
     _id: Optional[str] = None
 
+    def to_dict(self):
+        return {
+            "type": self.type,
+            "body": self.body,
+            "created_at": self.created_at.timestamp() if self.created_at else None,
+            "id": str(self._id)
+        }
+
 
 class UserManager:
     def __init__(self) -> None:
@@ -252,8 +260,12 @@ class UpdateManager:
     def __init__(self) -> None:
         pass
 
-    def get(self, user: str, created_at: datetime) -> List[Update]:
-        updates = db.updates.find({"users": user, "created_at": {"$gt": created_at}})
+    def get(self, user: str, created_at: Optional[datetime]=None) -> List[Update]:
+        query: dict = {"users": user}
+        if created_at:
+            query["created_at"] = {"$gt": created_at}
+
+        updates = db.updates.find(query)
         updates = [Update(**update) for update in updates]
         return updates
 

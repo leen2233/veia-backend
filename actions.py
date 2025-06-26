@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Dict, Optional
 
 from lib import db
@@ -173,7 +174,7 @@ def get_messages(data, conn) -> Response:
     chat = None
     chat_id = data.get("chat_id", "")
     last_message = data.get("last_message")
-    
+
     if not chat_id:
         user_id = data.get("user_id")
         chat = db.chats.check_exists(conn.user._id, user_id)
@@ -267,3 +268,15 @@ def read_message(data, conn: Connection) -> Response:
     db.updates.create(update)
 
     return Response(updated, {}, send_now=False)
+
+
+@protected
+def get_updates(data, conn: Connection) -> Response:
+    last_time = data.get("last_time")
+    if last_time:
+        last_time = datetime.fromtimestamp(last_time)
+
+    updates = db.updates.get(user=str(conn.user._id), created_at=last_time) # type: ignore
+
+    updates_serialized = [update.to_dict() for update in updates]
+    return Response(True, {"updates": updates_serialized})
