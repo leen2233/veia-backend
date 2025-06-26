@@ -99,7 +99,8 @@ class Message:
             "text": self.text,
             "time": self.time.timestamp() if self.time else None,
             "status": self.status.value if type(self.status) is not str else self.status,
-            "reply_to": reply_to
+            "reply_to": reply_to,
+            "chat_id": str(self.chat)
         }
         if user:
             data["is_mine"] = str(self.sender) == str(user._id)
@@ -230,9 +231,12 @@ class MessageManager:
         result: UpdateResult = db.messages.update_one({"_id": ObjectId(message_id)}, {"$set": data})
         return result.modified_count > 0
 
-    def update_many(self, message_ids: List[str], data: dict):
+    def update_many(self, message_ids: List[str], data: dict, chat_id: Optional[str] = None,):
         object_ids = [ObjectId(mid) for mid in message_ids]
-        result: UpdateResult = db.messages.update_many({"_id": {"$in": object_ids}}, {"$set": data})
+        query: dict = {"_id": {"$in": object_ids}}
+        if chat_id:
+            query["chat"] = chat_id
+        result: UpdateResult = db.messages.update_many(query, {"$set": data})
         return result.modified_count > 0
 
     def delete(self, message_id: str) -> bool:

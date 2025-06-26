@@ -158,9 +158,8 @@ def new_message(data, conn) -> Response:
     message = db.messages.create(message)
 
     message_serialized = message.serialize()
-    chat_serialized = chat.serialize(conn.user) if chat else None
 
-    data = {"message": message_serialized, "chat": chat_serialized}
+    data = {"message": message_serialized}
 
     if chat:
         update = db.Update(type="new_message", body=data, users=list(set([chat.user1, chat.user2])))
@@ -209,7 +208,7 @@ def delete_message(data, conn: Connection) -> Response:
 
     db.messages.delete(message_id)
     if chat:
-        update = db.Update(type="delete_message", body={"message_id": message_id}, users=list(set([chat.user1, chat.user2])))
+        update = db.Update(type="delete_message", body={"message_id": message_id, "chat_id": str(message.chat)}, users=list(set([chat.user1, chat.user2])))
         db.updates.create(update)
 
     return Response(True, {}, send_now=False)
@@ -230,7 +229,7 @@ def edit_message(data, conn: Connection) -> Response:
     db.messages.update(message_id, {"text": text})
 
     if chat:
-        update = db.Update(type="edit_message", body={"message_id": message_id, "text": text}, users=list(set([chat.user1, chat.user2])))
+        update = db.Update(type="edit_message", body={"message_id": message_id, "text": text, "chat_id": str(message.chat)}, users=list(set([chat.user1, chat.user2])))
         db.updates.create(update)
 
     return Response(True, {}, send_now=False)
@@ -240,32 +239,27 @@ def edit_message(data, conn: Connection) -> Response:
 def read_message(data, conn: Connection) -> Response:
     message_id = data.get("message_id")
     message_ids = data.get("message_ids", []) # for multiple
+    chat_id = data.get("chat_id")
 
     updated = False
     if message_id:
         message_ids.append(message_id)
     updated = db.messages.update_many(message_ids, {"status": db.Message.Status.READ.value})
 
-    users_to_notify = set()
-    chats = set()
+    user_to_notify = None
 
     if updated:
-        for id in message_ids:
-            message = db.messages.get(id)
-            if message and message.chat not in chats:
-                chat = db.chats.get(message.chat)
-                chats.add(message.chat)
-                if chat:
-                    user_to_notify = ""
-                    if conn.user and str(chat.user1) == str(conn.user._id):
-                        user_to_notify = chat.user2
-                    elif conn.user and str(chat.user2) == str(conn.user._id):
-                        user_to_notify = chat.user1
-                    users_to_notify.add(str(user_to_notify))
+        user_to_notify = ""
+        chat = db.chats.get(chat_id)
+        if chat:
+            if conn.user and str(chat.user1) == str(conn.user._id):
+                user_to_notify = chat.user2
+            elif conn.user and str(chat.user2) == str(conn.user._id):
+                user_to_notify = chat.user1
 
-    data = {"ids": message_ids, "status": "read"}
-    update = db.Update(type="read_message", body=data, users=list(users_to_notify))
-    db.updates.create(update)
+            data = {"message_ids": message_ids, "chat_id": chat_id, "status": "read"}
+            update = db.Update(type="read_message", body=data, users=[user_to_notify])
+            db.updates.create(update)
 
     return Response(updated, {}, send_now=False)
 

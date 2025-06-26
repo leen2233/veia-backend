@@ -119,6 +119,7 @@ class Server:
         return [connection for connection in self.client_list if connection.is_open and connection.user and str(connection.user._id) == id]
 
     async def handle_update(self, update: db.Update):
+        print(update.users)
         for user in update.users:
             online_user_conns = await self.find_online_user(user)
             if online_user_conns:
