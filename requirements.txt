@@ -6,3 +6,4 @@ PyJWT
 flask
 requests
 termcolor
+redis[hiredis]
