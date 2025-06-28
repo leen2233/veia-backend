@@ -154,12 +154,24 @@ def new_message(data, conn) -> Response:
 
     text = data.get("text")
     reply_to = data.get("reply_to")
+
+    local_id = data.get("local_id")
+    time = None
+    if local_id:
+        timestamp = data.get("timestamp")
+        time = datetime.fromtimestamp(timestamp)
+
     message = db.Message(text=text, sender=conn.user._id, chat=chat_id, reply_to=reply_to)
+    if time:
+        message.time = time
+
     message = db.messages.create(message)
 
     message_serialized = message.serialize()
 
     data = {"message": message_serialized}
+    if local_id:
+        data["local_id"] = local_id
 
     if chat:
         update = db.Update(type="new_message", body=data, users=list(set([chat.user1, chat.user2])))
