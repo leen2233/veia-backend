@@ -201,7 +201,7 @@ def get_messages(data, conn) -> Response:
         if not chat:
             return Response(False, {"message": "chat not found"})
 
-    messages, has_more = db.messages.get_chat_messages(chat_id, limit=20, last_message=last_message)
+    messages, has_more = db.messages.get_chat_messages(chat_id, limit=30, last_message=last_message)
     messages_serialized = [message.serialize() for message in messages]
     return Response(True, {"results": messages_serialized, "chat": chat.serialize(conn.user), "has_more": has_more})
 
