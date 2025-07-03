@@ -273,7 +273,7 @@ def read_message(data, conn: Connection) -> Response:
             update = db.Update(type="read_message", body=data, users=[user_to_notify])
             db.updates.create(update)
 
-    return Response(updated, {}, send_now=False)
+    return Response(updated, {"message_ids": message_ids, "chat_id": chat_id, "status": "read"}, send_now=True)
 
 
 @protected
